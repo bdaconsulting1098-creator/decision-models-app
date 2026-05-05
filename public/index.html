@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mental Models - Decision Advisor</title>
+<meta name="theme-color" content="#7c3aed">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mental Models">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  body { font-family: 'Inter', sans-serif; }
+  .glass { background: rgba(255,255,255,0.04); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.07); }
+  .glass-strong { background: rgba(255,255,255,0.07); backdrop-filter: blur(24px); border: 1px solid rgba(255,255,255,0.1); }
+  .gradient-text { background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .pulse-glow { animation: pulseGlow 4s ease-in-out infinite; }
+  @keyframes pulseGlow { 0%,100% { box-shadow: 0 0 15px rgba(96,165,250,0.08); } 50% { box-shadow: 0 0 30px rgba(167,139,250,0.15); } }
+  .fade-in { animation: fadeIn 0.35s ease-out; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  .card-hover { transition: all 0.25s ease; }
+  .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+  .loading-dots::after { content:''; animation: dots 1.5s steps(4,end) infinite; }
+  @keyframes dots { 0%{content:'';} 25%{content:'.';} 50%{content:'..';} 75%{content:'...';} }
+  .md h2 { font-size:1.2rem; font-weight:700; margin:1.2rem 0 0.5rem; color:#c4b5fd; }
+  .md h3 { font-size:1.05rem; font-weight:600; margin:1rem 0 0.4rem; color:#a78bfa; }
+  .md p { margin:0.4rem 0; line-height:1.75; color:#d1d5db; }
+  .md ul { list-style:disc; padding-left:1.4rem; margin:0.5rem 0; }
+  .md ol { list-style:decimal; padding-left:1.4rem; margin:0.5rem 0; }
+  .md li { margin:0.25rem 0; line-height:1.7; color:#d1d5db; }
+  .md strong { color:#f0abfc; font-weight:600; }
+  .md blockquote { border-left:3px solid #a78bfa; padding-left:1rem; margin:0.8rem 0; color:#9ca3af; font-style:italic; }
+  .md hr { border-color:rgba(255,255,255,0.1); margin:1rem 0; }
+  .chat-bubble-user { background: linear-gradient(135deg, rgba(96,165,250,0.12), rgba(167,139,250,0.12)); border: 1px solid rgba(139,92,246,0.2); }
+  .chat-bubble-ai { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); }
+  .recording { animation: recordPulse 1s ease-in-out infinite; }
+  @keyframes recordPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 50% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } }
+  ::-webkit-scrollbar { width:5px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.12); border-radius:3px; }
+  /* Mobile touch improvements */
+  @media (max-width: 640px) {
+    .glass, .glass-strong { backdrop-filter: blur(8px); }
+    .md h2 { font-size:1.05rem; }
+    .md p, .md li { font-size:0.875rem; line-height:1.65; }
+    textarea { font-size: 16px !important; }
+    input { font-size: 16px !important; }
+    select { font-size: 16px !important; }
+  }
+  /* PWA install banner */
+  .install-banner { background: linear-gradient(135deg, rgba(96,165,250,0.12), rgba(167,139,250,0.12)); border: 1px solid rgba(139,92,246,0.25); }
+  .install-banner button { min-height: 44px; min-width: 44px; }
+</style>
+</head>
+<body class="bg-[#0a0a0f] text-gray-100 min-h-screen">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const catColors = {
+  // Sources of Insight categories (129 Munger models)
+  'Human Nature & Judgment': 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/25',
+  'General Thinking Tools': 'bg-indigo-500/15 text-indigo-300 border-indigo-500/25',
+  'Microeconomics': 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25',
+  'Mathematics & Probability': 'bg-cyan-500/15 text-cyan-300 border-cyan-500/25',
+  'Physics & Systems': 'bg-teal-500/15 text-teal-300 border-teal-500/25',
+  'Biology & Evolution': 'bg-amber-500/15 text-amber-300 border-amber-500/25',
+  'Organization & Institutions': 'bg-orange-500/15 text-orange-300 border-orange-500/25',
+  // Legacy categories (for backward compatibility)
+  'Cognitive Biases': 'bg-purple-500/15 text-purple-300 border-purple-500/25',
+  'Human Cognition': 'bg-amber-500/15 text-amber-300 border-amber-500/25',
+  'Statistical Laws': 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
+  'Prospect Theory': 'bg-pink-500/15 text-pink-300 border-pink-500/25',
+  'Experience Evaluation': 'bg-blue-500/15 text-blue-300 border-blue-500/25',
+  'Prediction and Uncertainty': 'bg-red-500/15 text-red-300 border-red-500/25',
+  'Physics Chemistry and Biology': 'bg-teal-500/15 text-teal-300 border-teal-500/25',
+  'Systems': 'bg-orange-500/15 text-orange-300 border-orange-500/25',
+  'Numeracy': 'bg-cyan-500/15 text-cyan-300 border-cyan-500/25',
+  'Military and War': 'bg-rose-500/15 text-rose-300 border-rose-500/25',
+  'Human Nature and Judgment': 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/25',
+};
+
+// Extract all mental model names mentioned in AI response text
+// Models are formatted as **Model Name（中文）** or **Model Name** in markdown
+function extractMentionedModels(text, allModels) {
+  if (!text || !allModels || allModels.length === 0) return [];
+  
+  const mentioned = [];
+  const seen = new Set();
+  
+  // Strategy 1: Extract bold text that matches model names
+  // Pattern: **Model Name（中文）** or **Model Name**
+  const boldMatches = text.match(/\*\*([^*]+?)\*\*/g) || [];
+  for (const bm of boldMatches) {
+    let name = bm.replace(/\*+/g, '').trim();
+    // Strip Chinese parenthetical: "Model Name（中文）" -> "Model Name"
+    name = name.replace(/[（(][^）)]*[）)]$/, '').trim();
+    if (name.length < 3 || name.length > 80) continue;
+    
+    // Match against model library (name or englishName)
+    // Use exact match first, then fuzzy substring match
+    let found = allModels.find(m => 
+      m.name === name || 
+      m.englishName === name ||
+      m.name.toLowerCase() === name.toLowerCase() ||
+      (m.englishName && m.englishName.toLowerCase() === name.toLowerCase())
+    );
+    // Fuzzy fallback: if bold text is a substring of model name or vice versa
+    if (!found) {
+      const nameLower = name.toLowerCase();
+      found = allModels.find(m => {
+        const mNameLower = m.name.toLowerCase();
+        const mEngLower = m.englishName ? m.englishName.toLowerCase() : '';
+        // Check if name contains model name or model name contains name
+        return (mNameLower.includes(nameLower) || nameLower.includes(mNameLower) ||
+                (mEngLower && (mEngLower.includes(nameLower) || nameLower.includes(mEngLower))));
+      });
+    }
+    if (found && !seen.has(found.id)) {
+      seen.add(found.id);
+      mentioned.push(found);
+    }
+  }
+  
+  // Strategy 2: ALWAYS do fuzzy substring match to catch models not in bold format
+  // e.g. "Status-quo bias", "Sunk-cost fallacy", "Loss aversion" etc.
+  for (const m of allModels) {
+    if (seen.has(m.id)) continue;
+    const namesToCheck = [m.name, m.englishName].filter(Boolean);
+    for (const n of namesToCheck) {
+      if (n.length > 3 && text.toLowerCase().includes(n.toLowerCase())) {
+        seen.add(m.id);
+        mentioned.push(m);
+        break;
+      }
+    }
+  }
+  
+  console.log('[extractMentionedModels] Found', mentioned.length, 'models from', text.length, 'chars');
+  return mentioned;
+}
+
+function renderMd(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/^---$/gm,'<hr/>')
+    .replace(/^- (.+)$/gm,'<li>$1</li>')
+    .replace(/^(\d+)\.\s+(.+)$/gm,'<li>$2</li>')
+    .replace(/\n\n/g,'</p><p>')
+    .replace(/\n/g,'<br/>');
+}
+
+function ModelCard({ model, onClick }) {
+  const catCls = catColors[model.category] || 'bg-gray-500/15 text-gray-300 border-gray-500/25';
+  return (
+    <div onClick={() => onClick(model)}
+      className="glass card-hover rounded-xl p-5 cursor-pointer pulse-glow">
+      <div className="flex items-start justify-between mb-2.5">
+        <h3 className="text-[0.95rem] font-semibold text-white leading-tight flex-1 mr-2">{model.name}</h3>
+        <span className={`text-[0.65rem] px-2 py-0.5 rounded-full whitespace-nowrap font-medium ${
+          model.source==='kahneman' ? 'bg-blue-500/15 text-blue-300' : 'bg-amber-500/15 text-amber-300'
+        }`}>
+          {model.source==='kahneman' ? 'Kahneman' : 'Munger'}
+        </span>
+      </div>
+      <p className="text-xs text-gray-400 line-clamp-3 mb-3 leading-relaxed">{model.coreConcept}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {model.category && (
+          <span className={`text-[0.65rem] px-2 py-0.5 rounded-full border ${catCls}`}>{model.category}</span>
+        )}
+        {(model.tags || []).slice(0,2).map(t => (
+          <span key={t} className="text-[0.65rem] px-2 py-0.5 rounded-full bg-white/5 text-gray-400 border border-white/8">{t}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ModelDetail({ model, onClose, language }) {
+  if (!model) return null;
+  const catCls = catColors[model.category] || 'bg-gray-500/15 text-gray-300 border-gray-500/25';
+
+  const t = {
+    'en-US': {
+      coreConcept: 'Core Concept',
+      whenToUse: 'When to Use',
+      example: 'Example',
+      relatedMunger: 'Related Munger Model',
+      tags: 'Tags'
+    },
+    'zh-CN': {
+      coreConcept: '核心概念',
+      whenToUse: '何时使用',
+      example: '示例',
+      relatedMunger: '相关 Munger 模型',
+      tags: '标签'
+    }
+  }[language] || {
+      coreConcept: 'Core Concept',
+      whenToUse: 'When to Use',
+      example: 'Example',
+      relatedMunger: 'Related Munger Model',
+      tags: 'Tags'
+    };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm fade-in" onClick={onClose}>
+      <div className="glass-strong rounded-t-2xl sm:rounded-2xl max-w-2xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-y-auto p-5 sm:p-7 fade-in" onClick={e=>e.stopPropagation()}>
+        <div className="flex justify-between items-start mb-4 sm:mb-5">
+          <div className="flex-1 min-w-0 mr-3">
+            <h2 className="text-xl sm:text-2xl font-bold gradient-text">{model.name}</h2>
+            {model.englishName && model.englishName !== model.name && (
+              <p className="text-gray-500 mt-1 text-xs sm:text-sm">{model.englishName}</p>
+            )}
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white text-2xl leading-none min-w-[44px] min-h-[44px] flex items-center justify-center">&times;</button>
+        </div>
+        <div className="flex flex-wrap gap-2 mb-5">
+          <span className={`text-xs px-2.5 py-1 rounded-full border ${catCls}`}>{model.category}</span>
+          {model.source==='kahneman' ? (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/25">Thinking, Fast and Slow</span>
+          ) : (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25">Munger's 100 Models</span>
+          )}
+          {model.modelId && (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-white/5 text-gray-400 border border-white/8">{model.modelId}</span>
+          )}
+        </div>
+        <div className="space-y-5">
+          <div>
+            <h4 className="text-xs font-semibold text-purple-300 mb-2 uppercase tracking-wider">{t.coreConcept}</h4>
+            <p className="text-gray-200 leading-relaxed text-sm">{language === 'zh-CN' && model.coreConceptCN ? model.coreConceptCN : model.coreConcept}</p>
+          </div>
+          {(language === 'zh-CN' ? (model.whenToUseCN || model.whenToUse) : model.whenToUse) && (
+            <div>
+              <h4 className="text-xs font-semibold text-blue-300 mb-2 uppercase tracking-wider">{t.whenToUse}</h4>
+              <p className="text-gray-200 leading-relaxed text-sm">{language === 'zh-CN' && model.whenToUseCN ? model.whenToUseCN : model.whenToUse}</p>
+            </div>
+          )}
+          {(language === 'zh-CN' ? (model.exampleCN || model.example) : model.example) && (
+            <div>
+              <h4 className="text-xs font-semibold text-green-300 mb-2 uppercase tracking-wider">{t.example}</h4>
+              <p className="text-gray-200 leading-relaxed text-sm">{language === 'zh-CN' && model.exampleCN ? model.exampleCN : model.example}</p>
+            </div>
+          )}
+          {model.relatedMunger && (
+            <div>
+              <h4 className="text-xs font-semibold text-amber-300 mb-2 uppercase tracking-wider">{t.relatedMunger}</h4>
+              <p className="text-gray-200 text-sm">{model.relatedMunger}</p>
+            </div>
+          )}
+          {(model.tags || []).length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold text-pink-300 mb-2 uppercase tracking-wider">{t.tags}</h4>
+              <div className="flex flex-wrap gap-2">
+                {model.tags.map(t => (
+                  <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-white/5 text-gray-300 border border-white/8">{t}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Speech-to-Text hook using Web Speech API
+function useSpeechToText() {
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef(null);
+
+  const startListening = useCallback((onResult, lang) => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert('Speech recognition not supported in this browser. Try Chrome.'); return; }
+    // Abort any existing session before starting a new one
+    if (recognitionRef.current) { recognitionRef.current.abort(); recognitionRef.current = null; }
+    const recognition = new SR();
+    let resultHandled = false;
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = lang || 'en-US';
+    recognition.onresult = (e) => {
+      // Guard: only handle the first result, ignore any duplicate firings
+      if (resultHandled) return;
+      if (e.results[0].isFinal) {
+        resultHandled = true;
+        const transcript = e.results[0][0].transcript.trim();
+        onResult(transcript);
+        setListening(false);
+      }
+    };
+    recognition.onerror = (e) => { setListening(false); recognitionRef.current = null; };
+    recognition.onend = () => { setListening(false); recognitionRef.current = null; };
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
+  }, []);
+
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) { recognitionRef.current.abort(); recognitionRef.current = null; }
+    setListening(false);
+  }, []);
+
+  return { listening, startListening, stopListening };
+}
+
+// Text-to-Speech
+function speak(text, lang) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  let clean = text.replace(/\*\*/g,'').replace(/#{1,3}\s/g,'').replace(/[-*]\s/g,'');
+  // For Chinese, extract Chinese from mixed headings like "Cognitive Traps（认知陷阱）"
+  if (lang === 'zh-CN') {
+    clean = clean.replace(/^([A-Z][A-Za-z\s&]+)（([^）]+）)/gm, '$2');
+    clean = clean.replace(/\(([A-Za-z\s&]+)\)/g, ''); // remove English parenthetical
+  }
+  const utt = new SpeechSynthesisUtterance(clean);
+  utt.rate = 0.9;
+  utt.pitch = 1.0;
+  utt.lang = lang || 'en-US';
+  window.speechSynthesis.speak(utt);
+}
+
+function stopSpeaking() {
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+}
+
+function DecisionHelper({ models, onModelClick, conversations, setConversations, activeConvId, setActiveConvId, language, setLanguage }) {
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  // language and setLanguage now come from props (lifted to App)
+  const chatEndRef = useRef(null);
+  const { listening, startListening, stopListening } = useSpeechToText();
+  const [speakingId, setSpeakingId] = useState(null);
+
+  // i18n texts
+  const i18n = {
+    'en-US': {
+      title: 'Decision Advisor',
+      subtitle: 'Describe your decision scenario — AI will match mental models and analyze it for you',
+      recentChats: 'Recent Conversations',
+      messages: 'messages',
+      placeholder: 'Describe the decision you\'re facing...',
+      ctrlEnter: 'Ctrl+Enter to submit',
+      voiceInput: 'Voice input',
+      analyze: 'Analyze',
+      analyzing: 'Analyzing...',
+      tryThese: 'Try these scenarios:',
+      newDecision: '← New Decision',
+      followUp: 'Ask a follow-up question...',
+      enterSend: 'Enter to send',
+      shiftNewLine: 'Shift+Enter for new line',
+      readAloud: '🔊 Read aloud',
+      stop: '⏹ Stop',
+      matchedModels: 'Matched Mental Models',
+      thinking: 'Thinking with mental models'
+    },
+    'zh-CN': {
+      title: '决策顾问',
+      subtitle: '描述你的决策场景 —— AI 会匹配心智模型并为你分析',
+      recentChats: '最近对话',
+      messages: '条消息',
+      placeholder: '描述你面临的决策...',
+      ctrlEnter: 'Ctrl+Enter 提交',
+      voiceInput: '语音输入',
+      analyze: '分析',
+      analyzing: '分析中...',
+      tryThese: '试试这些场景:',
+      newDecision: '← 新决策',
+      followUp: '继续提问...',
+      enterSend: 'Enter 发送',
+      shiftNewLine: 'Shift+Enter 换行',
+      readAloud: '🔊 朗读',
+      stop: '⏹ 停止',
+      matchedModels: '匹配的心智模型',
+      thinking: '用心智模型思考中'
+    }
+  };
+
+  const t = i18n[language] || i18n['en-US'];
+
+  const LANG_MAP = {
+    'zh-CN': 'zh-CN',
+    'en-US': 'en-US',
+    'yue-CN': 'zh-CN',
+  };
+  const SR_LANG = LANG_MAP[language] || 'en-US';
+
+  const activeConv = conversations.find(c => c.id === activeConvId) || null;
+
+
+
+  // Start new conversation
+  const startNewChat = () => {
+    setActiveConvId(null);
+    setInput('');
+  };
+
+  // Send message
+  const handleSubmit = async (overrideInput) => {
+    const text = (overrideInput || input).trim();
+    if (!text || loading) return;
+    setLoading(true); setError(null);
+
+    const isNewConv = !activeConvId;
+    const convId = activeConvId || Date.now().toString();
+    const history = activeConv ? activeConv.messages : [];
+
+    // Optimistically add user message
+    const userMsg = { role: 'user', content: text };
+    setConversations(prev => {
+      if (isNewConv) {
+        return [...prev, { id: convId, messages: [userMsg], matchedModels: [], provider: '', model: '' }];
+      } else {
+        return prev.map(c => c.id === convId ? { ...c, messages: [...c.messages, userMsg] } : c);
+      }
+    });
+    setActiveConvId(convId);
+    setInput('');
+
+    try {
+      const r = await fetch('/api/decide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          problem: text,
+          frontendModels: models,
+          history: history.length > 0 ? history : undefined,
+          language,
+        })
+      });
+      const data = await r.json();
+      if (data.error) throw new Error(data.error);
+
+      const aiMsg = { role: 'assistant', content: data.analysis, model: data.model || '', provider: data.provider || '' };
+      
+      // Extract all models actually mentioned in the AI response
+      const mentionedModels = extractMentionedModels(data.analysis, models);
+      const displayModels = mentionedModels.length > 0 ? mentionedModels : (data.models || []);
+      
+      setConversations(prev => prev.map(c =>
+        c.id === convId
+          ? {
+              ...c,
+              messages: [...c.messages, aiMsg],
+              matchedModels: isNewConv ? displayModels : (c.matchedModels.length > 0 ? c.matchedModels : displayModels),
+            }
+          : c
+      ));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeConv?.messages, loading]);
+
+  const providerLabel = (p) => {
+    if (p === 'openrouter') return '🌐 OpenRouter';
+    if (p === 'nvidia') return '🟢 NVIDIA';
+    if (p === 'deepseek') return '🧠 DeepSeek';
+    return '';
+  };
+
+  const examples = language === 'zh-CN' ? [
+    "公司给涨薪 30% 但行业不确定，要不要跳槽？",
+    "一只股票跌了 40%，要不要抄底？",
+    "团队成员很有能力但很难相处，怎么处理？",
+    "花 3 个月学习一个全新领域值得吗？",
+    "两份工作都很好，怎么选？",
+  ] : [
+    "Should I switch to a company paying 30% more in an uncertain industry?",
+    "Should I invest in a stock that's dropped 40%?",
+    "How to handle a talented but difficult team member?",
+    "Should I spend 3 months learning a completely new field?",
+    "Choosing between two equally good job offers?",
+  ];
+
+  // Welcome screen (no active conversation)
+  if (!activeConvId) {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <div className="text-center mb-6 sm:mb-8">
+          <h2 className="text-2xl sm:text-3xl font-bold gradient-text mb-2 sm:mb-3">{t.title}</h2>
+          <p className="text-gray-500 text-sm sm:text-base">{t.subtitle}</p>
+        </div>
+
+        {/* Conversation history sidebar */}
+        {conversations.length > 0 && (
+          <div className="mb-5 sm:mb-6">
+            <h3 className="text-xs font-semibold text-gray-500 mb-2 sm:mb-3 uppercase tracking-wider">{t.recentChats}</h3>
+            <div className="space-y-2">
+              {conversations.slice().reverse().slice(0, 5).map(conv => (
+                <div key={conv.id}
+                  onClick={() => setActiveConvId(conv.id)}
+                  className="glass rounded-lg p-3 cursor-pointer card-hover flex items-center gap-2 sm:gap-3">
+                  <span className="text-base sm:text-lg">💬</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm text-gray-300 truncate">{conv.messages[0]?.content}</p>
+                    <p className="text-[0.6rem] sm:text-[0.65rem] text-gray-600 mt-0.5">
+                      {conv.messages.length} {t.messages}
+                    </p>
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); setConversations(prev => prev.filter(c => c.id !== conv.id)); }}
+                    className="text-gray-600 hover:text-red-400 text-xs p-1 min-w-[32px] min-h-[32px] flex items-center justify-center">✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="glass-strong rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="flex flex-col gap-3">
+            <textarea value={input} onChange={e=>setInput(e.target.value)}
+              placeholder={t.placeholder}
+              className="w-full bg-transparent text-gray-100 text-base placeholder-gray-600 resize-none min-h-[80px] sm:min-h-[100px] focus:outline-none"
+              onKeyDown={e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)) handleSubmit(); }} />
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Voice input */}
+              <button
+                onClick={() => listening ? stopListening() : startListening((t) => setInput(prev => prev ? prev + ' ' + t : t), SR_LANG)}
+                className={`p-2.5 rounded-xl transition-all min-w-[44px] min-h-[44px] flex items-center justify-center ${
+                  listening ? 'bg-red-500/20 text-red-400 recording' : 'glass text-gray-500 hover:text-purple-300'
+                }`}
+                title={listening ? t.stop : t.voiceInput}>
+                {listening ? '⏹' : '🎤'}
+              </button>
+              <select value={language} onChange={e => setLanguage(e.target.value)}
+                className="glass text-gray-400 text-xs rounded-xl px-2 py-2.5 cursor-pointer focus:outline-none border-none min-h-[44px]">
+                <option value="en-US">🇺🇸 EN</option>
+                <option value="zh-CN">🇨🇳 中文</option>
+              </select>
+              
+              {/* Model selection */}
+              <button onClick={()=>handleSubmit()} disabled={loading||!input.trim()}
+                className={`ml-auto px-5 py-2.5 rounded-xl font-medium text-sm transition-all min-h-[44px] ${
+                  loading||!input.trim()
+                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white hover:shadow-lg hover:shadow-purple-500/20'
+                }`}>
+                {loading ? t.analyzing : t.analyze}
+              </button>
+            </div>
+          </div>
+          <div className="text-xs text-gray-600 mt-3 hidden sm:block">{t.ctrlEnter} · 🎤 {t.voiceInput}</div>
+        </div>
+
+        <div className="mb-6 sm:mb-8">
+          <p className="text-xs text-gray-600 mb-2 sm:mb-3">{t.tryThese}</p>
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
+            {examples.map(ex => (
+              <button key={ex} onClick={()=>setInput(ex)}
+                className="text-[0.7rem] sm:text-xs px-2.5 sm:px-3 py-1.5 sm:py-1.5 rounded-lg glass text-gray-400 hover:text-white transition-colors min-h-[36px]">{ex}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Active conversation view
+  return (
+    <div className="max-w-3xl mx-auto flex flex-col" style={{height: 'calc(100vh - 56px)'}}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2 sm:mb-3 flex-shrink-0 px-1">
+        <button onClick={startNewChat} className="text-xs sm:text-sm text-gray-500 hover:text-purple-300 transition-colors min-h-[36px] min-w-[36px] flex items-center">
+          {t.newDecision}
+        </button>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <span className="text-[0.65rem] text-gray-600">{activeConv?.messages?.length || 0}</span>
+          {/* Language toggle in active chat */}
+          <select value={language} onChange={e => setLanguage(e.target.value)}
+            className="glass text-gray-400 text-[0.65rem] rounded-lg px-1 sm:px-1.5 py-1 cursor-pointer focus:outline-none border-none min-h-[36px]">
+            <option value="en-US">🇺🇸</option>
+            <option value="zh-CN">🇨🇳</option>
+          </select>
+          
+
+        </div>
+      </div>
+
+      {/* Chat messages */}
+      <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-4 mb-2 sm:mb-3 pr-0 sm:pr-1">
+        {/* Matched models (show once) */}
+        {activeConv?.matchedModels?.length > 0 && (
+          <div className="fade-in">
+            <h3 className="text-xs font-semibold text-purple-300 mb-1.5 sm:mb-2 uppercase tracking-wider">{t.matchedModels}</h3>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {activeConv.matchedModels.map(m => (
+                <button key={m.id} onClick={()=>onModelClick(m)}
+                  className="text-[0.65rem] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg glass text-gray-300 hover:text-white transition-colors card-hover min-h-[36px]">
+                  {m.name} <span className="text-gray-600 hidden sm:inline">{m.modelId}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeConv?.messages?.map((msg, i) => (
+          <div key={i} className={`fade-in flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[92%] sm:max-w-[85%] rounded-2xl px-4 py-3 sm:px-5 sm:py-3.5 ${
+              msg.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'
+            }`}>
+              {msg.role === 'assistant' ? (
+                <div>
+                  <div className="md text-xs sm:text-sm" dangerouslySetInnerHTML={{__html: renderMd(msg.content)}} />
+                  {msg.model && (
+                    <div className="text-[0.6rem] sm:text-[0.65rem] text-gray-500 mt-1.5 sm:mt-2">
+                      {providerLabel(msg.provider)} · {msg.model}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mt-2 sm:mt-3 pt-1.5 sm:pt-2 border-t border-white/5">
+                    <button
+                      onClick={() => { if (speakingId === i) { stopSpeaking(); setSpeakingId(null); } else { speak(msg.content, SR_LANG); setSpeakingId(i); } }}
+                      className={`text-xs px-2 py-1 rounded-md transition-colors min-h-[36px] min-w-[36px] ${
+                        speakingId === i ? 'bg-purple-500/20 text-purple-300' : 'text-gray-600 hover:text-purple-300'
+                      }`}>
+                      {speakingId === i ? t.stop : t.readAloud}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs sm:text-sm text-gray-200">{msg.content}</p>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {loading && (
+          <div className="fade-in flex justify-start">
+            <div className="chat-bubble-ai rounded-2xl px-5 py-4">
+              <p className="text-gray-400 text-sm"><span className="loading-dots">{t.thinking}</span></p>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="fade-in glass rounded-xl p-4 text-center border border-red-500/20">
+            <p className="text-red-300 text-sm">❌ {error}</p>
+          </div>
+        )}
+
+        <div ref={chatEndRef} />
+      </div>
+
+      {/* Follow-up input */}
+      <div className="flex-shrink-0 glass-strong rounded-2xl p-3 sm:p-4">
+        <div className="flex items-end gap-1.5 sm:gap-2">
+          <textarea value={input} onChange={e=>setInput(e.target.value)}
+            placeholder={t.followUp}
+            className="flex-1 bg-transparent text-gray-100 text-sm placeholder-gray-600 resize-none min-h-[40px] max-h-[120px] focus:outline-none"
+            rows={1}
+            onKeyDown={e=>{
+              if(e.key==='Enter'&&!e.shiftKey&&(e.metaKey||e.ctrlKey)) handleSubmit();
+              if(e.key==='Enter'&&!e.shiftKey&&!e.metaKey&&!e.ctrlKey) { e.preventDefault(); handleSubmit(); }
+            }} />
+          {/* Voice input */}
+          <button
+            onClick={() => listening ? stopListening() : startListening((t) => setInput(prev => prev ? prev + ' ' + t : t), SR_LANG)}
+            className={`p-2 rounded-xl transition-all flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center ${
+              listening ? 'bg-red-500/20 text-red-400 recording' : 'glass text-gray-500 hover:text-purple-300'
+            }`}
+            title={listening ? t.stop : t.voiceInput}>
+            {listening ? '⏹' : '🎤'}
+          </button>
+          <button onClick={()=>handleSubmit()} disabled={loading||!input.trim()}
+            className={`px-3 sm:px-4 py-2 rounded-xl font-medium text-sm transition-all flex-shrink-0 min-h-[40px] min-w-[40px] flex items-center justify-center ${
+              loading||!input.trim()
+                ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white hover:shadow-lg hover:shadow-purple-500/20'
+            }`}>
+            {loading ? '...' : '→'}
+          </button>
+        </div>
+        <div className="text-[0.6rem] sm:text-[0.65rem] text-gray-600 mt-1.5">{t.enterSend} · 🎤 {t.voiceInput}</div>
+      </div>
+    </div>
+  );
+}
+
+function ModelLibrary({ models, onModelClick, language }) {
+  const [search, setSearch] = useState('');
+  const [filterSource, setFilterSource] = useState('all');
+  const [filterCategory, setFilterCategory] = useState('all');
+
+  // i18n for library
+  const t = {
+    'en-US': {
+      title: 'Mental Model Library',
+      subtitle: (n, k, m) => `${n} models · Kahneman ${k} · Munger ${m}`,
+      searchPlaceholder: 'Search models, concepts, tags...',
+      allSources: 'All Sources',
+      allCategories: 'All Categories',
+      modelsFound: (n) => `${n} models found`,
+      noModels: 'No models found',
+      tabAdvisor: '💡 Advisor',
+      tabLibrary: (n) => `📚 Library (${n})`,
+      coreConcept: 'Core Concept',
+      whenToUse: 'When to Use',
+      example: 'Example',
+      relatedMunger: 'Related Munger Model',
+      tags: 'Tags',
+      loading: 'Loading mental models from Notion',
+      retry: 'Retry'
+    },
+    'zh-CN': {
+      title: '心智模型库',
+      subtitle: (n, k, m) => `共 ${n} 个模型 · Kahneman ${k} · Munger ${m}`,
+      searchPlaceholder: '搜索模型、概念、标签...',
+      allSources: '所有来源',
+      allCategories: '所有分类',
+      modelsFound: (n) => `找到 ${n} 个模型`,
+      noModels: '未找到模型',
+      tabAdvisor: '💡 决策顾问',
+      tabLibrary: (n) => `📚 模型库 (${n})`,
+      coreConcept: '核心概念',
+      whenToUse: '何时使用',
+      example: '示例',
+      relatedMunger: '相关 Munger 模型',
+      tags: '标签',
+      loading: '正在从 Notion 加载心智模型',
+      retry: '重试'
+    }
+  }[language] || {
+      title: 'Mental Model Library',
+      subtitle: (n, k, m) => `${n} models · Kahneman ${k} · Munger ${m}`,
+      searchPlaceholder: 'Search models, concepts, tags...',
+      allSources: 'All Sources',
+      allCategories: 'All Categories',
+      modelsFound: (n) => `${n} models found`,
+      noModels: 'No models found',
+      tabAdvisor: '💡 Advisor',
+      tabLibrary: (n) => `📚 Library (${n})`,
+      coreConcept: 'Core Concept',
+      whenToUse: 'When to Use',
+      example: 'Example',
+      relatedMunger: 'Related Munger Model',
+      tags: 'Tags',
+      loading: 'Loading mental models from Notion',
+      retry: 'Retry'
+    };
+
+  const categories = [...new Set(models.map(m=>m.category).filter(Boolean))].sort();
+
+  const filtered = models.filter(m => {
+    if (filterSource!=='all' && m.source!==filterSource) return false;
+    if (filterCategory!=='all' && m.category!==filterCategory) return false;
+    if (search) {
+      const s = search.toLowerCase();
+      return m.name.toLowerCase().includes(s)
+        || (m.englishName||'').toLowerCase().includes(s)
+        || m.coreConcept.toLowerCase().includes(s)
+        || (m.tags || []).some(t=>t.toLowerCase().includes(s));
+    }
+    return true;
+  });
+
+  const kCount = models.filter(m=>m.source==='kahneman').length;
+  const mCount = models.filter(m=>m.source==='munger').length;
+
+  return (
+    <div>
+      <div className="text-center mb-6 sm:mb-8">
+        <h2 className="text-2xl sm:text-3xl font-bold gradient-text mb-2 sm:mb-3">{t.title}</h2>
+        <p className="text-gray-500 text-xs sm:text-base">{t.subtitle(models.length, kCount, mCount)}</p>
+      </div>
+      <div className="glass rounded-xl p-3 sm:p-4 mb-5 sm:mb-6">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <div className="flex-1">
+            <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder={t.searchPlaceholder}
+              className="w-full bg-white/5 border border-white/8 rounded-lg px-3 sm:px-4 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/40" />
+          </div>
+          <select value={filterSource} onChange={e=>setFilterSource(e.target.value)}
+            className="bg-white/5 border border-white/8 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
+            <option value="all">{t.allSources}</option>
+            <option value="kahneman">Kahneman</option>
+            <option value="munger">Munger</option>
+          </select>
+          <select value={filterCategory} onChange={e=>setFilterCategory(e.target.value)}
+            className="bg-white/5 border border-white/8 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none max-w-[200px]">
+            <option value="all">{t.allCategories}</option>
+            {categories.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="mt-2 text-xs text-gray-600">{t.modelsFound(filtered.length)}</div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        {filtered.map(m => <ModelCard key={m.id} model={m} onClick={onModelClick} />)}
+      </div>
+      {filtered.length===0 && (
+        <div className="text-center py-16 text-gray-600">
+          <div className="text-4xl mb-3">🔍</div>
+          <p>{t.noModels}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const [models, setModels] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [tab, setTab] = useState('decide');
+  const [selectedModel, setSelectedModel] = useState(null);
+  const [language, setLanguage] = useState('en-US'); // Global language state
+  const [installPrompt, setInstallPrompt] = useState(null); // PWA install event
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+
+  // Listen for PWA install prompt
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+      // Show banner if not previously dismissed
+      try {
+        const dismissed = localStorage.getItem('mm_install_dismissed');
+        if (!dismissed) setShowInstallBanner(true);
+      } catch { setShowInstallBanner(true); }
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    setInstallPrompt(null);
+    setShowInstallBanner(false);
+  };
+
+  const dismissInstall = () => {
+    setShowInstallBanner(false);
+    try { localStorage.setItem('mm_install_dismissed', '1'); } catch {}
+  };
+
+  // i18n for App-level UI
+  const appT = {
+    'en-US': {
+      tabAdvisor: '💡 Advisor',
+      tabLibrary: (n) => `📚 Library (${n})`,
+      loading: 'Loading mental models...',
+      retry: 'Retry',
+      syncNotion: '🔄 Sync from Notion',
+      syncing: 'Syncing...',
+      useLocal: '✓ Using cached models',
+      loadModels: 'Load Models'
+    },
+    'zh-CN': {
+      tabAdvisor: '💡 决策顾问',
+      tabLibrary: (n) => `📚 模型库 (${n})`,
+      loading: '正在加载心智模型...',
+      retry: '重试',
+      syncNotion: '🔄 从 Notion 同步',
+      syncing: '同步中...',
+      useLocal: '✓ 使用本地缓存模型',
+      loadModels: '加载模型'
+    }
+  }[language] || {
+      tabAdvisor: '💡 Advisor',
+      tabLibrary: (n) => `📚 Library (${n})`,
+      loading: 'Loading mental models...',
+      retry: 'Retry',
+      syncNotion: '🔄 Sync from Notion',
+      syncing: 'Syncing...',
+      useLocal: '✓ Using cached models',
+      loadModels: 'Load Models'
+    };
+
+  // Conversation state lifted to App level for tab-switch persistence
+  const [conversations, setConversations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('dm_conversations');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [activeConvId, setActiveConvId] = useState(() => {
+    try { return localStorage.getItem('dm_activeConvId') || null; } catch { return null; }
+  });
+
+  // Persist conversations to localStorage
+  useEffect(() => {
+    try { localStorage.setItem('dm_conversations', JSON.stringify(conversations)); } catch {}
+  }, [conversations]);
+  useEffect(() => {
+    try { localStorage.setItem('dm_activeConvId', activeConvId || ''); } catch {}
+  }, [activeConvId]);
+
+  const [syncing, setSyncing] = useState(false);
+  const [dataSource, setDataSource] = useState(''); // 'local' or 'notion'
+
+  // Load models from localStorage cache or API
+  const loadModels = async (forceSync = false) => {
+    setLoading(true);
+    setError(null);
+    
+    // Try localStorage first if not forcing sync
+    if (!forceSync) {
+      try {
+        const cached = localStorage.getItem('dm_models');
+        if (cached) {
+          const data = JSON.parse(cached);
+          if (data.models && data.models.length > 0) {
+            setModels(data.models);
+            setDataSource('local');
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load cached models:', e);
+      }
+    }
+    
+    // Fetch from API
+    try {
+      const url = forceSync ? '/api/models?sync=true' : '/api/models';
+      const resp = await fetch(url);
+      const data = await resp.json();
+      if (data.models && data.models.length > 0) {
+        setModels(data.models);
+        setDataSource(data.source || 'notion');
+        // Cache to localStorage
+        try {
+          localStorage.setItem('dm_models', JSON.stringify({ models: data.models, updatedAt: data.updatedAt, source: data.source }));
+        } catch (e) {
+          console.error('Failed to cache models:', e);
+        }
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Sync from Notion
+  const syncFromNotion = async () => {
+    setSyncing(true);
+    await loadModels(true);
+    setSyncing(false);
+  };
+
+  useEffect(() => {
+    loadModels(false);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-4 animate-pulse">🧠</div>
+          <p className="text-gray-500 loading-dots">{appT.loading}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="glass-strong rounded-2xl p-8 text-center max-w-md">
+          <div className="text-4xl mb-4">⚠️</div>
+          <p className="text-red-300 mb-4 text-sm">{error}</p>
+          <button onClick={()=>window.location.reload()}
+            className="px-4 py-2 rounded-lg bg-purple-500/15 text-purple-300 hover:bg-purple-500/25 text-sm">{appT.retry}</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen">
+      {/* PWA Install Banner */}
+      {showInstallBanner && (
+        <div className="install-banner px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-purple-200 font-medium">{language === 'zh-CN' ? '📲 安装到手机' : '📲 Install App'}</p>
+            <p className="text-xs text-gray-400 truncate">{language === 'zh-CN' ? '离线可用，更快访问' : 'Works offline, faster access'}</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={dismissInstall} className="text-gray-500 text-xs px-2 py-1">{language === 'zh-CN' ? '以后' : 'Later'}</button>
+            <button onClick={handleInstall} className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs px-4 py-2 rounded-lg font-medium">{language === 'zh-CN' ? '安装' : 'Install'}</button>
+          </div>
+        </div>
+      )}
+      <nav className="glass sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <span className="text-lg sm:text-xl">🧠</span>
+            <h1 className="text-base sm:text-lg font-bold gradient-text">Mental Models</h1>
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+
+            {['decide','library'].map(t=>(
+              <button key={t} onClick={()=>setTab(t)}
+                className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                  tab===t
+                    ? 'bg-gradient-to-r from-blue-500/15 to-purple-500/15 text-white border border-purple-500/25'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}>
+                {t==='decide' ? appT.tabAdvisor : appT.tabLibrary(models.length)}
+              </button>
+            ))}
+            {/* Global language toggle */}
+            <select value={language} onChange={e => setLanguage(e.target.value)}
+              className="glass text-gray-400 text-xs rounded-lg px-1.5 sm:px-2 py-1.5 cursor-pointer focus:outline-none border-none">
+              <option value="en-US">🇺🇸</option>
+              <option value="zh-CN">🇨🇳</option>
+            </select>
+          </div>
+        </div>
+      </nav>
+      <main className="max-w-6xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
+        {tab==='decide' && <DecisionHelper models={models} onModelClick={setSelectedModel} conversations={conversations} setConversations={setConversations} activeConvId={activeConvId} setActiveConvId={setActiveConvId} language={language} setLanguage={setLanguage} />}
+        {tab==='library' && <ModelLibrary models={models} onModelClick={setSelectedModel} language={language} />}
+      </main>
+      <ModelDetail model={selectedModel} onClose={()=>setSelectedModel(null)} language={language} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+// Service Worker Registration
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then(reg => {
+      console.log('SW registered:', reg.scope);
+    }).catch(err => console.log('SW registration failed:', err));
+  });
+}
+</script>
+</body>
+</html>
