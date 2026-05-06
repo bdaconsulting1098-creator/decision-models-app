@@ -402,9 +402,23 @@ async function callDeepSeek(messages, model) {
   }
 }
 
-async function callLLM(messages, config, forceModel) {
-  // Primary: OpenRouter
-  console.log('[LLM] Using OpenRouter');
+async function callLLM(messages, config, providerName) {
+  console.log('[LLM] Requested provider:', providerName);
+  if (providerName === 'deepseek') {
+    console.log('[LLM] Using DeepSeek (user selected)');
+    const dsResult = await callDeepSeek(messages, DEEPSEEK_MODEL);
+    if (dsResult.ok) {
+      return { analysis: dsResult.content, modelUsed: dsResult.model, provider: 'deepseek' };
+    }
+    console.warn('[LLM] DeepSeek failed, falling back to OpenRouter');
+    const orResult = await callOpenRouter(messages, OPENROUTER_MODEL);
+    if (orResult.ok) {
+      return { analysis: orResult.content, modelUsed: orResult.model, provider: 'openrouter' };
+    }
+    throw new Error(`DeepSeek failed: (${dsResult.status}) ${dsResult.errText}. OpenRouter also failed: (${orResult.status}) ${orResult.errText}`);
+  }
+  // Default: OpenRouter first, then DeepSeek fallback
+  console.log('[LLM] Using OpenRouter (default)');
   const orResult = await callOpenRouter(messages, OPENROUTER_MODEL);
   if (orResult.ok) {
     return { analysis: orResult.content, modelUsed: orResult.model, provider: 'openrouter' };
@@ -536,7 +550,7 @@ When the user asks a follow-up question, continue the analysis using these menta
       messages.push({ role: 'user', content: scenario });
     }
 
-    const { analysis, modelUsed, provider } = await callLLM(messages, config, forceModel);
+    const { analysis, modelUsed, provider } = await callLLM(messages, config, req.body.provider || 'openrouter');
 
     res.status(200).json({
       analysis,

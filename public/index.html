@@ -341,6 +341,7 @@ function stopSpeaking() {
 function DecisionHelper({ models, onModelClick, conversations, setConversations, activeConvId, setActiveConvId, language, setLanguage }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState('openrouter');
   const [error, setError] = useState(null);
   // language and setLanguage now come from props (lifted to App)
   const chatEndRef = useRef(null);
@@ -424,7 +425,7 @@ function DecisionHelper({ models, onModelClick, conversations, setConversations,
     const userMsg = { role: 'user', content: text };
     setConversations(prev => {
       if (isNewConv) {
-        return [...prev, { id: convId, messages: [userMsg], matchedModels: [], provider: '', model: '' }];
+        return [...prev, { id: convId, messages: [userMsg], matchedModels: [], provider: selectedProvider, model: '' }];
       } else {
         return prev.map(c => c.id === convId ? { ...c, messages: [...c.messages, userMsg] } : c);
       }
@@ -441,6 +442,7 @@ function DecisionHelper({ models, onModelClick, conversations, setConversations,
           frontendModels: models,
           history: history.length > 0 ? history : undefined,
           language,
+          provider: selectedProvider,
         })
       });
       const data = await r.json();
@@ -471,6 +473,11 @@ function DecisionHelper({ models, onModelClick, conversations, setConversations,
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeConv?.messages, loading]);
+
+    const providerOptions = [
+      { value: 'openrouter', label: '🌐 OpenRouter · nemotron-3-120b' },
+      { value: 'deepseek', label: '🧠 DeepSeek · v4-flash' }
+    ];
 
   const providerLabel = (p) => {
     if (p === 'openrouter') return '🌐 OpenRouter';
@@ -546,6 +553,11 @@ function DecisionHelper({ models, onModelClick, conversations, setConversations,
                 className="glass text-gray-400 text-xs rounded-xl px-2 py-2.5 cursor-pointer focus:outline-none border-none min-h-[44px]">
                 <option value="en-US">🇺🇸 EN</option>
                 <option value="zh-CN">🇨🇳 中文</option>
+              </select>
+              <select value={selectedProvider} onChange={e => setSelectedProvider(e.target.value)}
+                className="glass text-gray-400 text-xs rounded-xl px-2 py-2.5 cursor-pointer focus:outline-none border-none min-h-[44px]">
+                <option value="openrouter">🤖 OpenRouter</option>
+                <option value="deepseek">🧠 DeepSeek</option>
               </select>
               
               {/* Model selection */}
